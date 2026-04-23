@@ -1,0 +1,17 @@
+# Build folders
+[Bb]in/
+[Oo]bj/
+
+# External packages
+packages/
+
+# Visual Studio files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Operating System files
+Thumbs.db
+.DS_Store
