@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Karol\\Documents\\exporter\\exporter.csproj",
+      "projectUniqueName": "C:\\Users\\Karol\\Documents\\sim-connect\\sim-connect\\exporter\\exporter.csproj",
       "projectName": "exporter",
-      "projectPath": "C:\\Users\\Karol\\Documents\\exporter\\exporter.csproj",
+      "projectPath": "C:\\Users\\Karol\\Documents\\sim-connect\\sim-connect\\exporter\\exporter.csproj",
       "packagesPath": "C:\\Users\\Karol\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Karol\\Documents\\exporter\\obj\\",
+      "outputPath": "C:\\Users\\Karol\\Documents\\sim-connect\\sim-connect\\exporter\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\Karol\\AppData\\Roaming\\NuGet\\NuGet.Config"
