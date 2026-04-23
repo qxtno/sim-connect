@@ -30,6 +30,9 @@ struct PlaneInfo
 {
     [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
     public string ATCModel;
+    public double EngineCount;
+    public double EngineType;
+    public double PropType;
 }
 
 class Program
@@ -38,7 +41,11 @@ class Program
     static UdpClient udp;
     static DateTime lastSendTime = DateTime.MinValue;
     static DateTime lastModelRequest = DateTime.MinValue;
+
     static string currentModel = "LOADING...";
+    static double engineCount = 0;
+    static string engineType = "UNKNOWN";
+    static string propStyle = "UNKNOWN";
 
     static JsonSerializerOptions jsonOptions = new JsonSerializerOptions
     {
@@ -77,14 +84,14 @@ class Program
             simconnect.RegisterDataDefineStruct<FlightData>(DEFINES.FLIGHT_DATA);
 
             simconnect.AddToDataDefinition(DEFINES.PLANE_INFO, "ATC MODEL", null, SIMCONNECT_DATATYPE.STRING256, 0, SimConnect.SIMCONNECT_UNUSED);
+            simconnect.AddToDataDefinition(DEFINES.PLANE_INFO, "NUMBER OF ENGINES", "number", SIMCONNECT_DATATYPE.FLOAT64, 0, SimConnect.SIMCONNECT_UNUSED);
+            simconnect.AddToDataDefinition(DEFINES.PLANE_INFO, "ENGINE TYPE", "enum", SIMCONNECT_DATATYPE.FLOAT64, 0, SimConnect.SIMCONNECT_UNUSED);
+            simconnect.AddToDataDefinition(DEFINES.PLANE_INFO, "PROP TYPE", "enum", SIMCONNECT_DATATYPE.FLOAT64, 0, SimConnect.SIMCONNECT_UNUSED);
             simconnect.RegisterDataDefineStruct<PlaneInfo>(DEFINES.PLANE_INFO);
 
-            // Stick to AircraftLoaded - it is the "cleanest" way.
             simconnect.SubscribeToSystemEvent(EVENTS.AIRCRAFT_LOADED, "AircraftLoaded");
 
             simconnect.RequestDataOnSimObject(REQUESTS.FLIGHT_DATA, DEFINES.FLIGHT_DATA, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.VISUAL_FRAME, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
-
-            // Get initial name
             simconnect.RequestDataOnSimObject(REQUESTS.PLANE_INFO, DEFINES.PLANE_INFO, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
 
             Console.Clear();
@@ -95,9 +102,6 @@ class Program
             while (true)
             {
                 simconnect.ReceiveMessage();
-
-                // Fallback: If for some reason the event fails, check every 10 seconds.
-                // This is much lighter than PositionChanged.
                 if ((DateTime.Now - lastModelRequest).TotalSeconds > 10)
                 {
                     simconnect.RequestDataOnSimObject(REQUESTS.PLANE_INFO, DEFINES.PLANE_INFO, SimConnect.SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
@@ -124,7 +128,6 @@ class Program
         if (data.dwRequestID == (uint)REQUESTS.PLANE_INFO)
         {
             PlaneInfo pi = (PlaneInfo)data.dwData[0];
-
             string raw = pi.ATCModel.Replace("\0", "").Trim();
 
             string cleaned = raw;
@@ -133,21 +136,29 @@ class Program
                 string[] parts = raw.Split(' ');
                 cleaned = parts[parts.Length - 1];
             }
+            if (cleaned.Contains(".")) cleaned = cleaned.Split('.')[0];
 
-            if (cleaned.Contains("."))
-            {
-                cleaned = cleaned.Split('.')[0];
-            }
+            currentModel = cleaned.ToUpper();
+            engineCount = pi.EngineCount;
 
-            if (currentModel != cleaned)
+            engineType = pi.EngineType switch
             {
-                currentModel = cleaned.ToUpper();
-            }
+                0 => "PISTON",
+                1 => "JET",
+                2 => "TURBOPROP",
+                3 => "HELO",
+                4 => "UNSUPPORTED",
+                5 => "NONE",
+                _ => "UNKNOWN"
+            };
+
+            propStyle = (pi.PropType == 1) ? "FIXED" : "ADJUSTABLE";
             return;
         }
 
         if (data.dwRequestID == (uint)REQUESTS.FLIGHT_DATA)
         {
+            // Limit to ~20Hz (50ms)
             if ((DateTime.Now - lastSendTime).TotalMilliseconds < 50) return;
             lastSendTime = DateTime.Now;
 
@@ -159,6 +170,12 @@ class Program
                 var payload = new
                 {
                     aircraft = currentModel,
+                    specs = new
+                    {
+                        engines = engineCount,
+                        engine_type = engineType,
+                        prop_type = propStyle
+                    },
                     telemetry = new
                     {
                         alt = Math.Round(S(fd.Altitude), 0),
@@ -182,7 +199,8 @@ class Program
                 udp.Send(sendBuffer, sendBuffer.Length);
 
                 Console.SetCursorPosition(0, 3);
-                Console.WriteLine($"AIRCRAFT: {currentModel,-30}");
+                Console.WriteLine($"AIRCRAFT: {currentModel,-20}");
+                Console.WriteLine($"ENGINES:  {engineCount} x {engineType,-12} PROP: {propStyle,-10}");
                 Console.WriteLine("-----------------------------------------");
                 Console.WriteLine($"ALT: {payload.telemetry.alt,-10} SPD: {payload.telemetry.spd,-10}      ");
                 Console.WriteLine($"HDG: {payload.telemetry.hdg,-10} VSI: {payload.telemetry.vsi,-10}      ");
